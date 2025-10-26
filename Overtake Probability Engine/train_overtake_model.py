@@ -5,11 +5,22 @@ from sklearn.metrics import accuracy_score, confusion_matrix, classification_rep
 from sklearn.preprocessing import StandardScaler # Optional: For feature scaling
 import joblib # For saving the model
 
+# --- Loading Training Data ---
 print("--- Loading Training Data ---")
 try:
-    df_train = pd.read_csv("training_data.csv")
-    print(f"Loaded training_data.csv with {len(df_train)} samples.")
-    # Basic check for missing values (although we dropped some earlier)
+    # Load data from Race 1
+    df_train_r1 = pd.read_csv("training_data.csv")
+    print(f"Loaded training_data.csv (Race 1) with {len(df_train_r1)} samples.")
+
+    # Load data from Race 2
+    df_train_r2 = pd.read_csv("training_data_race2.csv")
+    print(f"Loaded training_data_race2.csv (Race 2) with {len(df_train_r2)} samples.")
+
+    # --- Combine the datasets ---
+    df_train = pd.concat([df_train_r1, df_train_r2], ignore_index=True)
+    print(f"Combined dataset has {len(df_train)} total samples.")
+
+    # Basic check for missing values
     print(f"Missing values before proceeding:\n{df_train.isnull().sum()}")
     # Drop any remaining rows with missing values in key columns if necessary
     key_features = ['Gap_At_P1', 'T11_Time_Diff', 'Exit_Speed_Diff', 'Successful_Pass'] # Adjust if columns differ
@@ -20,15 +31,12 @@ try:
         df_train = df_train.dropna(subset=key_features)
         print(f"Samples remaining after final NaN check: {len(df_train)}")
 
-except FileNotFoundError:
-    print("Error: training_data.csv not found. Make sure it's in the correct directory.")
+# Handle potential file errors
+except FileNotFoundError as e:
+    print(f"Error: Could not find one of the training data CSV files: {e}")
     exit()
 except Exception as e:
     print(f"Error loading or cleaning data: {e}")
-    exit()
-
-if df_train.empty:
-    print("Error: No data available for training after cleaning.")
     exit()
 
 print("\n--- Model Training ---")
