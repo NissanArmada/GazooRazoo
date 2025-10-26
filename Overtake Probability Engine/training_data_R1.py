@@ -24,7 +24,7 @@ def time_str_to_seconds(time_str):
 # --- 1. Load Analysis Data & Calculate T11 Time ---
 print("--- 1. Loading Analysis Data & T11 Time ---")
 try:
-    df_analysis = pd.read_csv("23_AnalysisEnduranceWithSections_Race 1_Anonymized.CSV", delimiter=';')
+    df_analysis = pd.read_csv("23_AnalysisEnduranceWithSections_Race_1_Anonymized.CSV", delimiter=';')
     df_analysis.columns = df_analysis.columns.str.strip()
     # Define T11 points and calculate time
     t11_start_col = 'IM2a_elapsed'
