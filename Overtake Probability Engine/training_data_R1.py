@@ -24,7 +24,7 @@ def time_str_to_seconds(time_str):
 # --- 1. Load Analysis Data & Calculate T11 Time ---
 print("--- 1. Loading Analysis Data & T11 Time ---")
 try:
-    df_analysis = pd.read_csv("23_AnalysisEnduranceWithSections_Race_1_Anonymized.CSV", delimiter=';')
+    df_analysis = pd.read_csv("Overtake Probability Engine/23_AnalysisEnduranceWithSections_Race 1_Anonymized.CSV", delimiter=';')
     df_analysis.columns = df_analysis.columns.str.strip()
     # Define T11 points and calculate time
     t11_start_col = 'IM2a_elapsed'
@@ -52,7 +52,7 @@ except Exception as e:
 # --- 2. Load Lap Start Times ---
 print("\n--- 2. Loading Lap Start Times ---")
 try:
-    df_lap_start = pd.read_csv("vir_lap_start_R1.csv")
+    df_lap_start = pd.read_csv("Overtake Probability Engine/vir_lap_start_R1.csv")
     df_lap_start['lap_start_time'] = pd.to_datetime(df_lap_start['value'], errors='coerce')
     df_lap_start = df_lap_start.dropna(subset=['lap_start_time'])
     # Extract vehicle number assuming format like 'GR86-XXX-Num' or similar
@@ -86,41 +86,34 @@ else:
 
 # --- 4. Load and Process Telemetry ---
 print("\n--- 4. Loading and Processing Telemetry ---")
-# Using the previously provided sample string
-telemetry_data_string = """expire_at,lap,meta_event,meta_session,meta_source,meta_time,original_vehicle_id,outing,telemetry_name,telemetry_value,timestamp,vehicle_id,vehicle_number
-,1,I_R04_2025-07-20,R1,kafka:gr-raw,2025-07-19T18:06:40.175Z,GR86-002-2,0,accx_can,0.217,2025-07-17T19:16:54.077Z,GR86-002-2,2
-,1,I_R04_2025-07-20,R1,kafka:gr-raw,2025-07-19T18:06:40.175Z,GR86-002-2,0,accy_can,-0.19,2025-07-17T19:16:54.077Z,GR86-002-2,2
-,1,I_R04_2025-07-20,R1,kafka:gr-raw,2025-07-19T18:06:40.175Z,GR86-002-2,0,ath,100.02,2025-07-17T19:16:54.077Z,GR86-002-2,2
-,1,I_R04_2025-07-20,R1,kafka:gr-raw,2025-07-19T18:06:40.175Z,GR86-002-2,0,pbrake_r,0,2025-07-17T19:16:54.077Z,GR86-002-2,2
-,1,I_R04_2025-07-20,R1,kafka:gr-raw,2025-07-19T18:06:40.175Z,GR86-002-2,0,pbrake_f,0,2025-07-17T19:16:54.077Z,GR86-002-2,2
-,1,I_R04_2025-07-20,R1,kafka:gr-raw,2025-07-19T18:06:40.175Z,GR86-002-2,0,gear,3,2025-07-17T19:16:54.077Z,GR86-002-2,2
-,1,I_R04_2025-07-20,R1,kafka:gr-raw,2025-07-19T18:06:40.175Z,GR86-002-2,0,Steering_Angle,-4.2,2025-07-17T19:16:54.077Z,GR86-002-2,2
-,1,I_R04_2025-07-20,R1,kafka:gr-raw,2025-07-19T18:06:40.175Z,GR86-002-2,0,accx_can,0.189,2025-07-17T19:16:54.034Z,GR86-002-2,2
-,1,I_R04_2025-07-20,R1,kafka:gr-raw,2025-07-19T18:06:40.175Z,GR86-002-2,0,accy_can,-0.211,2025-07-17T19:16:54.034Z,GR86-002-2,2
-,1,I_R04_2025-07-20,R1,kafka:gr-raw,2025-07-19T18:06:40.175Z,GR86-002-2,0,ath,100.02,2025-07-17T19:16:54.034Z,GR86-002-2,2
-,1,I_R04_2025-07-20,R1,kafka:gr-raw,2025-07-19T18:06:40.175Z,GR86-002-2,0,pbrake_r,0,2025-07-17T19:16:54.034Z,GR86-002-2,2
-,1,I_R04_2025-07-20,R1,kafka:gr-raw,2025-07-19T18:06:40.175Z,GR86-002-2,0,pbrake_f,0,2025-07-17T19:16:54.034Z,GR86-002-2,2
-,1,I_R04_2025-07-20,R1,kafka:gr-raw,2025-07-19T18:06:40.175Z,GR86-002-2,0,gear,3,2025-07-17T19:16:54.034Z,GR86-002-2,2
-,1,I_R04_2025-07-20,R1,kafka:gr-raw,2025-07-19T18:06:40.175Z,GR86-002-2,0,Steering_Angle,-4.7,2025-07-17T19:16:54.034Z,GR86-002-2,2
-,1,I_R04_2025-07-20,R1,kafka:gr-raw,2025-07-19T18:06:40.175Z,GR86-002-2,0,speed,135.41,2025-07-17T19:16:53.946Z,GR86-002-2,2
-# Add more sample data here if available, especially ensuring 'speed' entries exist for different cars/laps
-"""
+telemetry_file_r1 = "Overtake Probability Engine/R1_vir_telemetry_data.csv"
 try:
-    telemetry_io = io.StringIO(telemetry_data_string)
-    df_telemetry_long = pd.read_csv(telemetry_io)
+    # Load the full CSV file directly into df_telemetry_long
+    df_telemetry_long = pd.read_csv(telemetry_file_r1) 
+    
+    # We no longer need io.StringIO, so the rest of the processing starts here
     df_telemetry_long['timestamp'] = pd.to_datetime(df_telemetry_long['timestamp'], errors='coerce')
     df_telemetry_long = df_telemetry_long.dropna(subset=['timestamp'])
+
+    # Pivot the data
     df_telemetry = df_telemetry_long.pivot_table(
         index=['vehicle_number', 'lap', 'timestamp'], # Use vehicle_number
-        columns='telemetry_name', values='telemetry_value', aggfunc='first' # Use aggfunc='first' to handle potential duplicates
+        columns='telemetry_name', values='telemetry_value', aggfunc='first' # Use aggfunc='first'
     ).reset_index()
+    
+    # Convert data types
     numeric_cols = ['speed', 'ath', 'pbrake_f', 'pbrake_r', 'gear', 'Steering_Angle', 'nmot', 'accx_can', 'accy_can']
     for col in numeric_cols:
         if col in df_telemetry.columns:
             df_telemetry[col] = pd.to_numeric(df_telemetry[col], errors='coerce')
+    
     df_telemetry = df_telemetry.rename(columns={'vehicle_number': 'NUMBER', 'lap': 'LAP_NUMBER'}) # Rename for merging
     df_telemetry = df_telemetry.sort_values(by=['NUMBER', 'LAP_NUMBER', 'timestamp'])
-    print("Telemetry data loaded and processed.")
+    print(f"Full telemetry data loaded and processed from {telemetry_file_r1}.")
+
+except FileNotFoundError:
+    print(f"Error: Telemetry file not found: {telemetry_file_r1}")
+    df_telemetry = pd.DataFrame() # Create empty dataframe on error
 except Exception as e:
     print(f"Error processing telemetry data: {e}")
     df_telemetry = pd.DataFrame()
@@ -280,8 +273,8 @@ if not df_analysis.empty and not df_final_passes.empty:
     print(df_train.head())
 
     # Save the training data
-    df_train.to_csv("training_data.csv", index=False)
-    print("\nTraining data saved to 'training_data.csv'")
+    df_train.to_csv("Overtake Probability Engine/training_data_r1.csv", index=False)
+    print("\nTraining data saved to 'training_data_r1.csv'")
 
 else:
     print("Could not create training set due to missing intermediate dataframes.")
