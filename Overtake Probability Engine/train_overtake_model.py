@@ -9,35 +9,49 @@ import joblib # For saving the model
 print("--- Loading Training Data ---")
 try:
     # Load data from Race 1
-    df_train_r1 = pd.read_csv("training_data.csv")
-    print(f"Loaded training_data.csv (Race 1) with {len(df_train_r1)} samples.")
+    df_train_r1 = pd.read_csv("Overtake Probability Engine/training_data_r1.csv")
+    print(f"Loaded training_data_r1.csv (Race 1) with {len(df_train_r1)} samples.")
+    # *** FIX: Clean columns *before* concat ***
+    df_train_r1.columns = df_train_r1.columns.str.strip()
 
     # Load data from Race 2
-    df_train_r2 = pd.read_csv("training_data_race2.csv")
-    print(f"Loaded training_data_race2.csv (Race 2) with {len(df_train_r2)} samples.")
+    df_train_r2 = pd.read_csv("Overtake Probability Engine/training_data_r2.csv")
+    print(f"Loaded training_data_r2.csv (Race 2) with {len(df_train_r2)} samples.")
+    # *** FIX: Clean columns *before* concat ***
+    df_train_r2.columns = df_train_r2.columns.str.strip()
 
     # --- Combine the datasets ---
+    # Now concat will correctly align the cleaned columns
     df_train = pd.concat([df_train_r1, df_train_r2], ignore_index=True)
     print(f"Combined dataset has {len(df_train)} total samples.")
+    print("Cleaned column names and concatenated.")
 
     # Basic check for missing values
     print(f"Missing values before proceeding:\n{df_train.isnull().sum()}")
+    
     # Drop any remaining rows with missing values in key columns if necessary
-    key_features = ['Gap_At_P1', 'T11_Time_Diff', 'Exit_Speed_Diff', 'Successful_Pass'] # Adjust if columns differ
+    key_features = ['Gap_At_P1', 'T11_Time_Diff', 'Exit_Speed_Diff', 'Successful_Pass'] 
+    
     missing_keys = [col for col in key_features if col not in df_train.columns]
+    
     if missing_keys:
         print(f"Error: Missing expected columns for training: {missing_keys}")
+        print(f"Available columns are: {list(df_train.columns)}")
     else:
-        df_train = df_train.dropna(subset=key_features)
+        # This will now correctly check the *single* merged 'Exit_Speed_Diff' column
+        df_train = df_train.dropna(subset=key_features) 
         print(f"Samples remaining after final NaN check: {len(df_train)}")
 
 # Handle potential file errors
 except FileNotFoundError as e:
     print(f"Error: Could not find one of the training data CSV files: {e}")
+    print("Please make sure you have run both training_data_R1.py and training_data_R2.py first!")
     exit()
 except Exception as e:
     print(f"Error loading or cleaning data: {e}")
     exit()
+
+# (The rest of the script remains the same...)
 
 print("\n--- Model Training ---")
 
