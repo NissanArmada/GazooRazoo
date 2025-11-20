@@ -19,30 +19,64 @@ export default function LiveTelemetry() {
 
       const width = canvas.width;
       const height = canvas.height;
+      const leftMargin = 50;
+      const rightMargin = 20;
+      const topMargin = 25;
+      const bottomMargin = 20;
+      const chartWidth = width - leftMargin - rightMargin;
+      const chartHeight = height - topMargin - bottomMargin;
 
       ctx.clearRect(0, 0, width, height);
 
-      // Draw grid
+      // Draw label at top
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.font = '12px Inter';
+      ctx.textAlign = 'left';
+      ctx.fillText(label, leftMargin, 15);
+
+      // Draw grid and Y-axis
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
       ctx.lineWidth = 1;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.font = '10px Inter';
+      ctx.textAlign = 'right';
+      
       for (let i = 0; i <= 5; i++) {
-        const y = (height / 5) * i;
+        const y = topMargin + (chartHeight / 5) * i;
+        const value = 100 - (i * 20); // 100%, 80%, 60%, 40%, 20%, 0%
+        
+        // Draw grid line
         ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(width, y);
+        ctx.moveTo(leftMargin, y);
+        ctx.lineTo(width - rightMargin, y);
         ctx.stroke();
+        
+        // Draw Y-axis tick
+        ctx.beginPath();
+        ctx.moveTo(leftMargin - 5, y);
+        ctx.lineTo(leftMargin, y);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+        
+        // Draw Y-axis label
+        ctx.fillText(`${value}%`, leftMargin - 8, y + 3);
       }
+
+      // Draw time axis labels
+      ctx.textAlign = 'center';
+      ctx.fillText('TIME →', width - rightMargin - 30, height - 5);
 
       // Draw data line
       ctx.strokeStyle = color;
       ctx.lineWidth = 2;
       ctx.beginPath();
 
-      const pointSpacing = width / Math.max(data.length, 100);
+      const pointSpacing = chartWidth / Math.max(data.length, 100);
       
       data.forEach((value, i) => {
-        const x = i * pointSpacing;
-        const y = height - (value * (height - 20)) - 10;
+        const x = leftMargin + (i * pointSpacing);
+        const y = topMargin + chartHeight - (value * chartHeight);
         
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
@@ -56,21 +90,22 @@ export default function LiveTelemetry() {
       ctx.stroke();
       ctx.shadowBlur = 0;
 
-      // Draw current value indicator
+      // Draw current value indicator and label
       if (data.length > 0) {
         const lastValue = data[data.length - 1];
-        const y = height - (lastValue * (height - 20)) - 10;
+        const y = topMargin + chartHeight - (lastValue * chartHeight);
         
         ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.arc(width - 5, y, 4, 0, Math.PI * 2);
+        ctx.arc(width - rightMargin - 5, y, 4, 0, Math.PI * 2);
         ctx.fill();
+        
+        // Draw current value text
+        ctx.textAlign = 'left';
+        ctx.fillStyle = color;
+        ctx.font = 'bold 11px Inter';
+        ctx.fillText(`${Math.round(lastValue * 100)}%`, width - rightMargin + 5, y + 4);
       }
-
-      // Draw label
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-      ctx.font = '12px Inter';
-      ctx.fillText(label, 10, 20);
     };
 
     const animate = () => {

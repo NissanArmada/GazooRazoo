@@ -3,7 +3,6 @@ import TopBar from './components/TopBar';
 import DriverDNA from './components/DriverDNA';
 import TrackGrip from './components/TrackGrip';
 import LiveTelemetry from './components/LiveTelemetry';
-import GapHistory from './components/GapHistory';
 import OvertakeDefense from './components/OvertakeDefense';
 import AlertFeed from './components/AlertFeed';
 import GrainTexture from './components/GrainTexture';
@@ -83,13 +82,12 @@ export default function App() {
           {/* Left Panel - Diagnostics */}
           <aside className="lg:col-span-3 space-y-6">
             <DriverDNA addAlert={addAlert} />
-            <TrackGrip addAlert={addAlert} />
           </aside>
 
           {/* Center Panel - Live Data Hub */}
           <section className="lg:col-span-6 space-y-6">
             <LiveTelemetry />
-            <GapHistory />
+            <TrackGrip addAlert={addAlert} />
           </section>
 
           {/* Right Panel - Actionable Intel */}

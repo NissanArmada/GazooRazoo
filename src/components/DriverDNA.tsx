@@ -16,8 +16,43 @@ export default function DriverDNA({ addAlert }: DriverDNAProps) {
 
       const width = canvas.width;
       const height = canvas.height;
+      const leftMargin = 40;
+      const rightMargin = 10;
+      const topMargin = 10;
+      const bottomMargin = 10;
+      const chartWidth = width - leftMargin - rightMargin;
+      const chartHeight = height - topMargin - bottomMargin;
 
       ctx.clearRect(0, 0, width, height);
+
+      // Draw grid and Y-axis labels
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+      ctx.lineWidth = 1;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.font = '10px Inter';
+      ctx.textAlign = 'right';
+      
+      for (let i = 0; i <= 4; i++) {
+        const y = topMargin + (chartHeight / 4) * i;
+        const value = 100 - (i * 25); // 100%, 75%, 50%, 25%, 0%
+        
+        // Draw grid line
+        ctx.beginPath();
+        ctx.moveTo(leftMargin, y);
+        ctx.lineTo(width - rightMargin, y);
+        ctx.stroke();
+        
+        // Draw Y-axis tick
+        ctx.beginPath();
+        ctx.moveTo(leftMargin - 5, y);
+        ctx.lineTo(leftMargin, y);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+        
+        // Draw Y-axis label
+        ctx.fillText(`${value}%`, leftMargin - 8, y + 3);
+      }
 
       // Draw baseline "DNA" signature (optimal)
       ctx.strokeStyle = `${color}40`;
@@ -25,8 +60,8 @@ export default function DriverDNA({ addAlert }: DriverDNAProps) {
       ctx.beginPath();
       
       const baselinePoints = [];
-      for (let i = 0; i < width; i += 2) {
-        const progress = i / width;
+      for (let i = 0; i < chartWidth; i += 2) {
+        const progress = i / chartWidth;
         let value;
         
         if (type === 'brake') {
@@ -38,9 +73,10 @@ export default function DriverDNA({ addAlert }: DriverDNAProps) {
         }
         
         baselinePoints.push(value);
-        const y = height - value * (height - 20) - 10;
-        if (i === 0) ctx.moveTo(i, y);
-        else ctx.lineTo(i, y);
+        const x = leftMargin + i;
+        const y = topMargin + chartHeight - value * chartHeight;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
       }
       ctx.stroke();
 
@@ -49,25 +85,15 @@ export default function DriverDNA({ addAlert }: DriverDNAProps) {
       ctx.lineWidth = 2;
       ctx.beginPath();
       
-      for (let i = 0; i < width; i += 2) {
+      for (let i = 0; i < chartWidth; i += 2) {
         const deviation = (Math.random() - 0.5) * 0.15;
         const value = Math.max(0, Math.min(1, baselinePoints[i / 2] + deviation));
-        const y = height - value * (height - 20) - 10;
-        if (i === 0) ctx.moveTo(i, y);
-        else ctx.lineTo(i, y);
+        const x = leftMargin + i;
+        const y = topMargin + chartHeight - value * chartHeight;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
       }
       ctx.stroke();
-
-      // Draw grid
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
-      ctx.lineWidth = 1;
-      for (let i = 0; i < 5; i++) {
-        const y = (height / 4) * i;
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(width, y);
-        ctx.stroke();
-      }
     };
 
     const animate = () => {
