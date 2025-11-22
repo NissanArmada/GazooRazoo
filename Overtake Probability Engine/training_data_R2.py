@@ -183,13 +183,15 @@ try:
     opportunity_threshold = 1.5
     df_passes_calc['Overtake_Opportunity'] = (df_passes_calc['Gap_At_P1'] > 0) & (df_passes_calc['Gap_At_P1'] <= opportunity_threshold)
 
+    df_passes_calc['DRS_Available'] = np.where(df_passes_calc['Gap_At_P1'] <= 1.0, 1, 0)
+
     # Success if opportunity existed AND this car's P2 time < car ahead's P2 time
     df_passes_calc['Successful_Pass'] = np.where(
         (df_passes_calc['Overtake_Opportunity']) & (df_passes_calc['P2_s'] < df_passes_calc['Car_Ahead_P2_s']),
         1, 0
     )
 
-    df_final_passes = df_passes_calc[['NUMBER', 'LAP_NUMBER', 'Car_Ahead_P1_Num', 'Gap_At_P1', 'Overtake_Opportunity', 'Successful_Pass']].copy()
+    df_final_passes = df_passes_calc[['NUMBER', 'LAP_NUMBER', 'Car_Ahead_P1_Num', 'Gap_At_P1','DRS_Available', 'Overtake_Opportunity', 'Successful_Pass']].copy()
     print("Pass success calculated.")
 
 except KeyError as e:
@@ -242,6 +244,7 @@ if not df_analysis.empty and not df_final_passes.empty:
         'Car_B_T11_Time',
         'Car_A_Exit_Speed',
         'Car_B_Exit_Speed',
+        'DRS_Available',
         'Successful_Pass' # This is our target variable 'y'
     ]
 
