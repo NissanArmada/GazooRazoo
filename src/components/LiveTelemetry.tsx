@@ -1,11 +1,16 @@
 import { useEffect, useRef } from 'react';
 import { Activity } from 'lucide-react';
 
-export default function LiveTelemetry() {
+interface LiveTelemetryProps {
+  telemetryData?: any[];
+}
+
+export default function LiveTelemetry({ telemetryData }: LiveTelemetryProps) {
   const throttleCanvasRef = useRef<HTMLCanvasElement>(null);
   const brakeCanvasRef = useRef<HTMLCanvasElement>(null);
   const throttleDataRef = useRef<number[]>([]);
   const brakeDataRef = useRef<number[]>([]);
+  const playbackIndexRef = useRef(0);
 
   useEffect(() => {
     const drawLiveChart = (
@@ -108,17 +113,24 @@ export default function LiveTelemetry() {
       }
     };
 
-    const animate = () => {
-      // Simulate live data streaming
-      const newThrottle = Math.max(0, Math.min(1, 
-        Math.sin(Date.now() / 500) * 0.4 + 0.5 + (Math.random() - 0.5) * 0.1
-      ));
-      const newBrake = Math.max(0, Math.min(1,
-        Math.cos(Date.now() / 700) * 0.3 + 0.3 + (Math.random() - 0.5) * 0.1
-      ));
+    let animationFrameId: number;
 
-      throttleDataRef.current.push(newThrottle);
-      brakeDataRef.current.push(newBrake);
+    const animate = () => {
+      if (telemetryData && telemetryData.length > 0) {
+        playbackIndexRef.current = (playbackIndexRef.current + 1) % telemetryData.length;
+        const point = telemetryData[playbackIndexRef.current];
+        
+        if (point) {
+          throttleDataRef.current.push(point.throttle || 0);
+          brakeDataRef.current.push(point.brake || 0);
+        }
+      } else {
+        // No data - push zeros or keep empty
+        // To keep the chart moving/alive but flat, we can push 0
+        // Or just do nothing. Let's push 0 to clear the chart over time
+        throttleDataRef.current.push(0);
+        brakeDataRef.current.push(0);
+      }
 
       // Keep only last 100 points
       if (throttleDataRef.current.length > 100) {
@@ -145,12 +157,14 @@ export default function LiveTelemetry() {
           'BRAKE PRESSURE (F)'
         );
       }
+      
+      animationFrameId = requestAnimationFrame(animate);
     };
 
-    const interval = setInterval(animate, 50);
+    animate();
 
-    return () => clearInterval(interval);
-  }, []);
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [telemetryData]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -173,7 +187,12 @@ export default function LiveTelemetry() {
 
   return (
     <>
-      <div className="glass-card p-6 hover-glow-effect grain-overlay animate-fade-in">
+      <div className="glass-card p-6 hover-glow-effect grain-overlay animate-fade-in relative overflow-hidden">
+        {telemetryData && telemetryData.length > 0 && (
+          <div className="absolute top-0 right-0 bg-[#a3e635] text-black text-[10px] font-bold px-2 py-1 rounded-bl-lg animate-pulse">
+            LIVE DATA
+          </div>
+        )}
         <h3 className="text-2xl mb-4 text-[#a3e635] text-glow-lime uppercase tracking-wider flex items-center gap-2">
           <Activity className="w-6 h-6" style={{ filter: 'drop-shadow(0 0 10px rgba(163, 230, 53, 0.6))' }} />
           Live Telemetry
@@ -182,7 +201,7 @@ export default function LiveTelemetry() {
         <div id="liveThrottleChart" className="live-chart-container mb-4">
           <canvas
             ref={throttleCanvasRef}
-            className="w-full h-32 rounded-lg bg-black/40"
+            className="w-full h-24 rounded-lg bg-black/40"
           />
         </div>
       </div>
@@ -191,7 +210,7 @@ export default function LiveTelemetry() {
         <div id="liveBrakeChart" className="live-chart-container">
           <canvas
             ref={brakeCanvasRef}
-            className="w-full h-32 rounded-lg bg-black/40"
+            className="w-full h-24 rounded-lg bg-black/40"
           />
         </div>
       </div>

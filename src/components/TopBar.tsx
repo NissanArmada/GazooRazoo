@@ -3,9 +3,10 @@ import { Clock } from 'lucide-react';
 
 interface TopBarProps {
   fcyActive: boolean;
+  driverName?: string;
 }
 
-export default function TopBar({ fcyActive }: TopBarProps) {
+export default function TopBar({ fcyActive, driverName }: TopBarProps) {
   const [lapNumber, setLapNumber] = useState(1);
   const [raceTime, setRaceTime] = useState('00:00:00');
   const [ghostDelta, setGhostDelta] = useState(0);
@@ -60,6 +61,20 @@ export default function TopBar({ fcyActive }: TopBarProps) {
         <div className="flex items-center justify-between gap-6 flex-wrap lg:flex-nowrap">
           {/* Left: Vitals */}
           <div className="flex items-center gap-6">
+            {driverName && (
+              <>
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 rounded-full bg-[#a3e635]/20 flex items-center justify-center border border-[#a3e635]/50">
+                    <span className="text-[#a3e635] font-bold text-sm">#{driverName}</span>
+                  </div>
+                  <div>
+                    <div className="text-xs text-[#a3a3a3] uppercase tracking-wider">Driver</div>
+                    <div className="text-xl text-white text-glow-lime">Car #{driverName}</div>
+                  </div>
+                </div>
+                <div className="h-10 w-px bg-white/10"></div>
+              </>
+            )}
             <div className="flex items-center gap-2">
               <Clock className="w-5 h-5 text-[#06b6d4]" style={{ filter: 'drop-shadow(0 0 10px rgba(6, 182, 212, 0.5))' }} />
               <div>

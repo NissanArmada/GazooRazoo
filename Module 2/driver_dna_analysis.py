@@ -49,29 +49,36 @@ DETAILED_DEBUG = False # Set to True to print detailed segment info during basel
 
 # --- Helper Functions ---
 
-def load_data():
+def load_data(telemetry_path=None, lap_times_path=None, sections_path=None):
     """Loads and preprocesses the required CSV files."""
+    # Use arguments if provided, otherwise fall back to global constants (for backward compatibility)
+    t_file = telemetry_path if telemetry_path else TELEMETRY_FILE
+    l_file = lap_times_path if lap_times_path else LAP_TIMES_FILE
+    s_file = sections_path if sections_path else SECTIONS_FILE
+
     try:
         # Check if files exist before attempting to load
-        if not os.path.exists(TELEMETRY_FILE):
-            raise FileNotFoundError(f"Telemetry file not found: {TELEMETRY_FILE}")
-        if not os.path.exists(LAP_TIMES_FILE):
-             raise FileNotFoundError(f"Lap times file not found: {LAP_TIMES_FILE}")
-        if not os.path.exists(SECTIONS_FILE):
-             raise FileNotFoundError(f"Sections file not found: {SECTIONS_FILE}")
+        if not os.path.exists(t_file):
+            raise FileNotFoundError(f"Telemetry file not found: {t_file}")
+        if not os.path.exists(l_file):
+             raise FileNotFoundError(f"Lap times file not found: {l_file}")
+        
+        # Sections file is optional
+        sections_df = None
+        if s_file and os.path.exists(s_file):
+             sections_df = pd.read_csv(s_file, sep=';', low_memory=False)
+             sections_df.columns = sections_df.columns.str.strip()
+        elif s_file:
+             # Only raise if a path was explicitly provided but not found
+             if sections_path:
+                 raise FileNotFoundError(f"Sections file not found: {s_file}")
 
-        telemetry_df = pd.read_csv(TELEMETRY_FILE, low_memory=False)
-        lap_times_df = pd.read_csv(LAP_TIMES_FILE)
+        telemetry_df = pd.read_csv(t_file, low_memory=False)
+        lap_times_df = pd.read_csv(l_file)
 
         # --- Clean column names by stripping whitespace ---
         lap_times_df.columns = lap_times_df.columns.str.strip()
         telemetry_df.columns = telemetry_df.columns.str.strip()
-        # --- End cleaning ---
-
-        # Specify separator for sections file
-        sections_df = pd.read_csv(SECTIONS_FILE, sep=';', low_memory=False)
-        # --- Clean section column names ---
-        sections_df.columns = sections_df.columns.str.strip()
         # --- End cleaning ---
 
         # --- More Robust Data Cleaning ---

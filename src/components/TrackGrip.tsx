@@ -1,8 +1,11 @@
+// TrackGrip component - displays track conditions and grip analysis
 import { useEffect, useState, useRef } from 'react';
 import { Cloud, Thermometer, Gauge, AlertTriangle, TrendingUp } from 'lucide-react';
 
 interface TrackGripProps {
   addAlert: (message: string, type: string) => void;
+  telemetryData?: any[];
+  weatherData?: any[];
 }
 
 interface Car {
@@ -27,23 +30,27 @@ interface GearAlert {
   timestamp: number;
 }
 
-export default function TrackGrip({ addAlert }: TrackGripProps) {
-  const [airTemp, setAirTemp] = useState(22);
-  const [trackTemp, setTrackTemp] = useState(35);
-  const [gripLevel, setGripLevel] = useState(95);
+export default function TrackGrip({ addAlert, telemetryData, weatherData }: TrackGripProps) {
+  const [airTemp, setAirTemp] = useState(0);
+  const [trackTemp, setTrackTemp] = useState(0);
+  const [gripLevel, setGripLevel] = useState(100);
+  const [gripConfidence, setGripConfidence] = useState(0);
+  const [expectedTimeDelta, setExpectedTimeDelta] = useState(0);
   const [weatherAlert, setWeatherAlert] = useState('');
-  const radarCanvasRef = useRef<HTMLCanvasElement>(null);
-  const throttleCanvasRef = useRef<HTMLCanvasElement>(null);
-  const brakeCanvasRef = useRef<HTMLCanvasElement>(null);
+  // Removed charts and radar refs and effects
   const throttleDataRef = useRef<number[]>([]);
   const brakeDataRef = useRef<number[]>([]);
   
   // Telemetry data for gear efficiency
-  const [currentSpeed, setCurrentSpeed] = useState(145);
-  const [currentGear, setCurrentGear] = useState(4);
-  const [currentRPM, setCurrentRPM] = useState(7200);
+  const [currentSpeed, setCurrentSpeed] = useState(0);
+  const [currentGear, setCurrentGear] = useState(0);
+  const [currentRPM, setCurrentRPM] = useState(0);
   const [gearAlerts, setGearAlerts] = useState<GearAlert[]>([]);
   
+  // Playback state
+  const playbackIndexRef = useRef(0);
+  const lastFrameTimeRef = useRef(0);
+
   // Optimal gear map (updated from external tool) - overlapping ranges allowed
   // Format: gear, minSpeed, maxSpeed (km/h)
   const optimalGearMap: GearMapEntry[] = [
@@ -181,92 +188,52 @@ export default function TrackGrip({ addAlert }: TrackGripProps) {
         setGearAlerts(prev => [alert, ...prev].slice(0, 3));
         addAlert(`Gear Mismatch: ${alert.message}`, 'gear');
       }
-      
-        // No automatic RPM-driven gear changes here. Gear is controlled by the dedicated 5s timer
-        // Keep mismatch checks and other alerts only (no setCurrentGear calls in this effect).
     }, 3000);
 
     return () => clearInterval(interval);
   }, [currentSpeed, currentGear, currentRPM, addAlert]);
 
-  // Dedicated gear-step timer: every 5s move gear by +/-1, capped to [1,4]
-  useEffect(() => {
-    const id = setInterval(() => {
-      setCurrentGear(prev => {
-        let next = prev;
-        if (prev <= 1) {
-          next = 2; // force up when at 1
-        } else if (prev >= 4) {
-          next = 3; // force down when at 4
-        } else {
-          // random up/down by 1
-          next = prev + (Math.random() < 0.5 ? -1 : 1);
-        }
-        // clamp
-        next = Math.max(1, Math.min(4, next));
+  // Removed simulation gear-step timer to rely solely on telemetry data
 
-        // Detect and alert on bad downshifts
-        if (next < prev) {
-          if (currentRPM < DOWN_SHIFT_EARLY_MAX || currentRPM > DOWN_SHIFT_LATE_MIN) {
-            const isEarly = currentRPM < DOWN_SHIFT_EARLY_MAX;
-            const alert: GearAlert = {
-              type: 'shift-point',
-              message: `DOWNSHIFT ${isEarly ? 'EARLY' : 'LATE'} (${prev}->${next}) | ${currentRPM.toFixed(0)} RPM`,
-              severity: isEarly ? 'warning' : 'critical',
-              timestamp: Date.now()
-            };
-            setGearAlerts(p => [alert, ...p].slice(0, 3));
-            addAlert(`Shift Point: ${alert.message}`, 'gear');
-          }
+  // Playback telemetry
+  useEffect(() => {
+    if (telemetryData && telemetryData.length > 0) {
+      let animationFrameId: number;
+      
+      const animate = () => {
+        // Advance playback
+        playbackIndexRef.current = (playbackIndexRef.current + 1) % telemetryData.length;
+        const point = telemetryData[playbackIndexRef.current];
+
+        if (point) {
+          setCurrentSpeed(point.speed || 0);
+          setCurrentRPM(point.rpm || 0);
+          setCurrentGear(point.gear || 1);
+          
+          // Update chart data
+          throttleDataRef.current.push(point.throttle || 0);
+          brakeDataRef.current.push(point.brake || 0);
+          if (throttleDataRef.current.length > 100) throttleDataRef.current.shift();
+          if (brakeDataRef.current.length > 100) brakeDataRef.current.shift();
         }
 
-        addDebug(`Gear timer: ${prev} -> ${next}`);
+        // Update weather if available (simplified: just take first point or match time)
+        if (weatherData && weatherData.length > 0) {
+           // In a real app, we'd binary search weatherData by timestamp
+           const weatherPoint = weatherData[0]; 
+           if (weatherPoint) {
+             setAirTemp(weatherPoint.airTemp);
+             setTrackTemp(weatherPoint.trackTemp);
+           }
+        }
 
-        // Add a small chart perturbation to visualize change
-        throttleDataRef.current.push(Math.max(0, Math.min(1, 0.5 + (Math.random() - 0.5) * 0.5)));
-        brakeDataRef.current.push(Math.max(0, Math.min(1, 0.3 + (Math.random() - 0.5) * 0.4)));
-        if (throttleDataRef.current.length > 100) throttleDataRef.current.shift();
-        if (brakeDataRef.current.length > 100) brakeDataRef.current.shift();
+        animationFrameId = requestAnimationFrame(animate);
+      };
 
-        return next;
-      });
-    }, 5000);
-
-    return () => clearInterval(id);
-  }, []);
-
-  // Simulate telemetry updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentSpeed(prev => Math.max(60, Math.min(280, prev + (Math.random() - 0.5) * 30)));
-      setCurrentRPM(prev => Math.max(3000, Math.min(8500, prev + (Math.random() - 0.5) * 800)));
-      
-      // Temperature changes
-      setAirTemp(prev => Math.max(15, Math.min(30, prev + (Math.random() - 0.5) * 0.5)));
-      setTrackTemp(prev => Math.max(25, Math.min(50, prev + (Math.random() - 0.5) * 1)));
-      setGripLevel(prev => Math.max(60, Math.min(100, prev + (Math.random() - 0.5) * 2)));
-
-      // Random grip warnings
-      if (Math.random() < 0.03) {
-        setWeatherAlert('GRIP REDUCED IN SECTOR 2');
-        addAlert('Track & Grip: Grip reduced in Sector 2', 'weather');
-        setTimeout(() => setWeatherAlert(''), 6000);
-      }
-      
-      // Update car positions on radar
-      setCars(prev => prev.map(car => {
-        if (car.isPlayer) return car;
-        
-        return {
-          ...car,
-          angle: (car.angle + (Math.random() - 0.5) * 15 + 360) % 360,
-          distance: Math.max(0.2, Math.min(0.9, car.distance + (Math.random() - 0.5) * 0.1))
-        };
-      }));
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [addAlert]);
+      animate();
+      return () => cancelAnimationFrame(animationFrameId);
+    }
+  }, [addAlert, telemetryData, weatherData]);
 
   // Record telemetry history whenever the core telemetry values change, and refresh report
   useEffect(() => {
@@ -284,295 +251,61 @@ export default function TrackGrip({ addAlert }: TrackGripProps) {
     generateMechanicalSympathyReport();
   }, [currentSpeed, currentGear, currentRPM]);
 
-  // Draw brake and throttle charts
-  useEffect(() => {
-    const drawLiveChart = (
-      canvas: HTMLCanvasElement,
-      data: number[],
-      color: string,
-      label: string
-    ) => {
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      const width = canvas.width;
-      const height = canvas.height;
-      const leftMargin = 50;
-      const rightMargin = 20;
-      const topMargin = 25;
-      const bottomMargin = 20;
-      const chartWidth = width - leftMargin - rightMargin;
-      const chartHeight = height - topMargin - bottomMargin;
-
-      ctx.clearRect(0, 0, width, height);
-
-      // Draw label at top
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-      ctx.font = '12px Inter';
-      ctx.textAlign = 'left';
-      ctx.fillText(label, leftMargin, 15);
-
-      // Draw grid and Y-axis
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
-      ctx.lineWidth = 1;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-      ctx.font = '10px Inter';
-      ctx.textAlign = 'right';
-      
-      for (let i = 0; i <= 5; i++) {
-        const y = topMargin + (chartHeight / 5) * i;
-        const value = 100 - (i * 20); // 100%, 80%, 60%, 40%, 20%, 0%
-        
-        // Draw grid line
-        ctx.beginPath();
-        ctx.moveTo(leftMargin, y);
-        ctx.lineTo(width - rightMargin, y);
-        ctx.stroke();
-        
-        // Draw Y-axis tick
-        ctx.beginPath();
-        ctx.moveTo(leftMargin - 5, y);
-        ctx.lineTo(leftMargin, y);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-        ctx.stroke();
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
-        
-        // Draw Y-axis label
-        ctx.fillText(`${value}%`, leftMargin - 8, y + 3);
-      }
-
-      // Draw time axis labels
-      ctx.textAlign = 'center';
-      ctx.fillText('TIME →', width - rightMargin - 30, height - 5);
-
-      // Draw data line
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-
-      const pointSpacing = chartWidth / Math.max(data.length, 100);
-      
-      data.forEach((value, i) => {
-        const x = leftMargin + (i * pointSpacing);
-        const y = topMargin + chartHeight - (value * chartHeight);
-        
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-
-      ctx.stroke();
-
-      // Draw glow effect
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 10;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-
-      // Draw current value indicator and label
-      if (data.length > 0) {
-        const lastValue = data[data.length - 1];
-        const y = topMargin + chartHeight - (lastValue * chartHeight);
-        
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(width - rightMargin - 5, y, 4, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Draw current value text
-        ctx.textAlign = 'left';
-        ctx.fillStyle = color;
-        ctx.font = 'bold 11px Inter';
-        ctx.fillText(`${Math.round(lastValue * 100)}%`, width - rightMargin + 5, y + 4);
-      }
-    };
-
-    const animate = () => {
-      // Simulate live data streaming
-      const newThrottle = Math.max(0, Math.min(1, 
-        Math.sin(Date.now() / 500) * 0.4 + 0.5 + (Math.random() - 0.5) * 0.1
-      ));
-      const newBrake = Math.max(0, Math.min(1,
-        Math.cos(Date.now() / 700) * 0.3 + 0.3 + (Math.random() - 0.5) * 0.1
-      ));
-
-      throttleDataRef.current.push(newThrottle);
-      brakeDataRef.current.push(newBrake);
-
-      // Keep only last 100 points
-      if (throttleDataRef.current.length > 100) {
-        throttleDataRef.current.shift();
-      }
-      if (brakeDataRef.current.length > 100) {
-        brakeDataRef.current.shift();
-      }
-
-      // Draw charts
-      if (throttleCanvasRef.current) {
-        drawLiveChart(
-          throttleCanvasRef.current,
-          throttleDataRef.current,
-          '#a3e635',
-          'THROTTLE (APS)'
-        );
-      }
-      if (brakeCanvasRef.current) {
-        drawLiveChart(
-          brakeCanvasRef.current,
-          brakeDataRef.current,
-          '#06b6d4',
-          'BRAKE PRESSURE (F)'
-        );
-      }
-    };
-
-    const interval = setInterval(animate, 50);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // Draw radar
-  useEffect(() => {
-    const canvas = radarCanvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const width = canvas.width;
-    const height = canvas.height;
-    
-    // Guard against invalid canvas dimensions
-    if (width <= 0 || height <= 0) return;
-    
-    const centerX = width / 2;
-    const centerY = height / 2;
-    const maxRadius = Math.min(width, height) / 2 - 10;
-    
-    // Guard against negative radius
-    if (maxRadius <= 0) return;
-
-    ctx.clearRect(0, 0, width, height);
-
-    // Draw radar circles
-    ctx.strokeStyle = 'rgba(6, 182, 212, 0.2)';
-    ctx.lineWidth = 1;
-    for (let i = 1; i <= 3; i++) {
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, (maxRadius / 3) * i, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-
-    // Draw radar cross
-    ctx.strokeStyle = 'rgba(6, 182, 212, 0.3)';
-    ctx.beginPath();
-    ctx.moveTo(centerX, centerY - maxRadius);
-    ctx.lineTo(centerX, centerY + maxRadius);
-    ctx.moveTo(centerX - maxRadius, centerY);
-    ctx.lineTo(centerX + maxRadius, centerY);
-    ctx.stroke();
-
-    // Draw scanning line (rotating)
-    const scanAngle = (Date.now() / 30) % 360;
-    const scanRad = (scanAngle * Math.PI) / 180;
-    ctx.strokeStyle = 'rgba(6, 182, 212, 0.4)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(centerX, centerY);
-    ctx.lineTo(
-      centerX + Math.cos(scanRad - Math.PI / 2) * maxRadius,
-      centerY + Math.sin(scanRad - Math.PI / 2) * maxRadius
-    );
-    ctx.stroke();
-
-    // Draw gradient fade for scan line
-    const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, maxRadius);
-    gradient.addColorStop(0, 'rgba(6, 182, 212, 0.1)');
-    gradient.addColorStop(0.5, 'rgba(6, 182, 212, 0.05)');
-    gradient.addColorStop(1, 'transparent');
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.moveTo(centerX, centerY);
-    ctx.arc(centerX, centerY, maxRadius, scanRad - Math.PI / 2 - 0.3, scanRad - Math.PI / 2);
-    ctx.closePath();
-    ctx.fill();
-
-    // Draw cars
-    cars.forEach(car => {
-      const carRad = (car.angle * Math.PI) / 180;
-      const carDist = car.distance * maxRadius;
-      const carX = centerX + Math.cos(carRad - Math.PI / 2) * carDist;
-      const carY = centerY + Math.sin(carRad - Math.PI / 2) * carDist;
-
-      // Draw car dot
-      ctx.fillStyle = car.color;
-      ctx.shadowColor = car.color;
-      ctx.shadowBlur = car.isPlayer ? 15 : 10;
-      ctx.beginPath();
-      ctx.arc(carX, carY, car.isPlayer ? 6 : 4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-
-      // Draw label
-      ctx.fillStyle = car.color;
-      ctx.font = 'bold 9px Inter';
-      ctx.textAlign = 'center';
-      ctx.fillText(car.label, carX, carY - 10);
-    });
-
-    // Draw center dot
-    ctx.fillStyle = '#a3e635';
-    ctx.shadowColor = '#a3e635';
-    ctx.shadowBlur = 10;
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, 4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-
-    // Draw compass labels
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-    ctx.font = '10px Inter';
-    ctx.textAlign = 'center';
-    ctx.fillText('N', centerX, centerY - maxRadius - 5);
-    ctx.fillText('S', centerX, centerY + maxRadius + 12);
-    ctx.textAlign = 'left';
-    ctx.fillText('E', centerX + maxRadius + 5, centerY + 4);
-    ctx.textAlign = 'right';
-    ctx.fillText('W', centerX - maxRadius - 5, centerY + 4);
-
-    const animationFrame = requestAnimationFrame(() => {});
-    return () => cancelAnimationFrame(animationFrame);
-  });
-
-  useEffect(() => {
-    const handleResize = () => {
-      if (radarCanvasRef.current) {
-        const rect = radarCanvasRef.current.getBoundingClientRect();
-        radarCanvasRef.current.width = rect.width;
-        radarCanvasRef.current.height = rect.height;
-      }
-      if (throttleCanvasRef.current) {
-        const rect = throttleCanvasRef.current.getBoundingClientRect();
-        throttleCanvasRef.current.width = rect.width;
-        throttleCanvasRef.current.height = rect.height;
-      }
-      if (brakeCanvasRef.current) {
-        const rect = brakeCanvasRef.current.getBoundingClientRect();
-        brakeCanvasRef.current.width = rect.width;
-        brakeCanvasRef.current.height = rect.height;
-      }
-    };
-
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
   const getGripColor = () => {
     if (gripLevel >= 90) return '#a3e635';
     if (gripLevel >= 75) return '#06b6d4';
     if (gripLevel >= 60) return '#fbbf24';
     return '#f87171';
   };
+
+  // Fetch Grip Analysis from Backend
+  useEffect(() => {
+    const fetchGripAnalysis = async () => {
+        if (!weatherData || weatherData.length === 0) return;
+        
+        const weather = weatherData[0];
+        
+        // Construct telemetry summary
+        const telemetrySummary = {
+            exit_speed: currentSpeed, 
+            mean_pbrake_f: brakeDataRef.current.length > 0 ? brakeDataRef.current.reduce((a: number, b: number) => a + b, 0) / brakeDataRef.current.length : 0,
+            aps_std: 0.1, 
+            brake_point_shift_seconds: 0.0, 
+            sector_id: 1 
+        };
+
+        try {
+            const response = await fetch('http://localhost:8000/analyze-grip', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    weather: {
+                        TrackTemp_F: (weather.trackTemp * 9/5) + 32, 
+                        Humidity_pct: 50, 
+                        CloudCover_pct: 20,
+                        WindSpeed_mph: 5,
+                        ...weather 
+                    },
+                    telemetry: telemetrySummary
+                })
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                if (result.status === 'success') {
+                    setGripLevel(result.data.grip_percent);
+                    setGripConfidence(result.data.confidence);
+                    setExpectedTimeDelta(result.data.expected_sector_time_change);
+                }
+            }
+        } catch (e) {
+            console.error("Grip analysis failed", e);
+        }
+    };
+
+    const interval = setInterval(fetchGripAnalysis, 2000); 
+    return () => clearInterval(interval);
+  }, [weatherData, currentSpeed]);
 
   return (
     <div className="glass-card p-6 hover-glow-effect grain-overlay animate-fade-in" style={{ animationDelay: '0.4s' }}>
@@ -611,6 +344,17 @@ export default function TrackGrip({ addAlert }: TrackGripProps) {
             >
               {gripLevel.toFixed(0)}%
             </div>
+            {gripLevel > 100 && (
+              <div className="text-[10px] text-[#a3e635] font-bold animate-pulse mt-1">
+                SUPER-OPTIMAL
+              </div>
+            )}
+            <div className="flex justify-between mt-2 text-[10px] text-gray-400 border-t border-white/5 pt-2">
+                <span>Conf: {(gripConfidence * 100).toFixed(0)}%</span>
+                <span className={expectedTimeDelta > 0 ? 'text-red-400' : 'text-green-400'}>
+                    Δ: {expectedTimeDelta > 0 ? '+' : ''}{expectedTimeDelta.toFixed(2)}s
+                </span>
+            </div>
           </div>
         </div>
 
@@ -621,21 +365,26 @@ export default function TrackGrip({ addAlert }: TrackGripProps) {
           </div>
         )}
 
-        {/* Middle Section: Live Telemetry and Charts */}
-        <div className="grid grid-cols-3 gap-4">
+        {/* Combined Section: Live Telemetry & Gear Efficiency */}
+        <div className="grid grid-cols-2 gap-4">
           {/* Live Telemetry Status */}
-          <div className="bg-black/40 rounded-lg p-4">
+          <div className="bg-black/40 rounded-lg p-4 relative overflow-hidden h-full">
+            {telemetryData && telemetryData.length > 0 && (
+              <div className="absolute top-0 right-0 bg-[#a3e635] text-black text-[10px] font-bold px-2 py-1 rounded-bl-lg animate-pulse">
+                LIVE DATA
+              </div>
+            )}
             <div className="text-xs text-[#d946ef] mb-3 uppercase tracking-wider flex items-center gap-1">
               <Gauge className="w-3 h-3" />
               Live Telemetry
             </div>
             <div className="space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-xs text-[#a3a3a3]\">SPEED</span>
+                <span className="text-xs text-[#a3a3a3]">SPEED</span>
                 <span className="text-lg text-white">{currentSpeed.toFixed(0)} kph</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-xs text-[#a3a3a3]\">GEAR</span>
+                <span className="text-xs text-[#a3a3a3]">GEAR</span>
                 <span 
                   className="text-3xl"
                   style={{
@@ -647,7 +396,7 @@ export default function TrackGrip({ addAlert }: TrackGripProps) {
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-xs text-[#a3a3a3]\">RPM</span>
+                <span className="text-xs text-[#a3a3a3]">RPM</span>
                 <span className="text-lg text-white">{currentRPM.toFixed(0)}</span>
               </div>
               {/* Debug panel - shows last shift/threshold decisions */}
@@ -662,45 +411,14 @@ export default function TrackGrip({ addAlert }: TrackGripProps) {
                 )}
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-xs text-[#a3a3a3]\">OPTIMAL</span>
-                <span className="text-lg text-[#06b6d4]\">Gear {getOptimalGear(currentSpeed)}</span>
+                <span className="text-xs text-[#a3a3a3]">OPTIMAL</span>
+                <span className="text-lg text-[#06b6d4]">Gear {getOptimalGear(currentSpeed)}</span>
               </div>
             </div>
           </div>
 
-          {/* Throttle Chart */}
-          <div className="bg-black/40 rounded-lg p-3">
-            <canvas
-              ref={throttleCanvasRef}
-              className="w-full h-full rounded-lg bg-black/60"
-            />
-          </div>
-
-          {/* Brake Chart */}
-          <div className="bg-black/40 rounded-lg p-3">
-            <canvas
-              ref={brakeCanvasRef}
-              className="w-full h-full rounded-lg bg-black/60"
-            />
-          </div>
-        </div>
-
-        {/* Bottom Section: Radar and Gear Alerts */}
-        <div className="grid grid-cols-3 gap-4">
-          {/* Minimap Radar - Bottom Left */}
-          <div className="bg-black/40 rounded-lg p-4">
-            <div className="text-xs text-[#06b6d4] mb-2 uppercase tracking-wider flex items-center gap-1">
-              <TrendingUp className="w-3 h-3" />
-              Position Radar
-            </div>
-            <canvas
-              ref={radarCanvasRef}
-              className="w-full aspect-square rounded-lg bg-black/60"
-            />
-          </div>
-
-          {/* Gear Efficiency Alerts - Span 2 columns */}
-          <div className="col-span-2 bg-black/40 rounded-lg p-4">
+          {/* Gear Efficiency Alerts */}
+          <div className="bg-black/40 rounded-lg p-4 h-full">
             <div className="text-xs text-[#fbbf24] mb-3 uppercase tracking-wider flex items-center gap-1">
               <AlertTriangle className="w-3 h-3" />
               Gear Efficiency Analyzer

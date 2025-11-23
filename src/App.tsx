@@ -5,13 +5,23 @@ import TrackGrip from './components/TrackGrip';
 import LiveTelemetry from './components/LiveTelemetry';
 import OvertakeDefense from './components/OvertakeDefense';
 import AlertFeed from './components/AlertFeed';
+import PositionRadar from './components/PositionRadar';
 import GrainTexture from './components/GrainTexture';
 import ParticleBackground from './components/ParticleBackground';
 import DecorativeShapes from './components/DecorativeShapes';
+import DataUpload from './components/DataUpload';
 
 export default function App() {
   const [fcyActive, setFcyActive] = useState(false);
   const [alerts, setAlerts] = useState<Array<{ time: string; message: string; type: string }>>([]);
+  
+  // Data State
+  const [telemetryData, setTelemetryData] = useState<any[]>([]);
+  const [weatherData, setWeatherData] = useState<any[]>([]);
+  const [lapsData, setLapsData] = useState<any[]>([]);
+  const [sectionsData, setSectionsData] = useState<any[]>([]);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [currentDriver, setCurrentDriver] = useState<string>('');
 
   const addAlert = (message: string, type: string) => {
     const now = new Date();
@@ -19,21 +29,15 @@ export default function App() {
     setAlerts(prev => [{ time, message, type }, ...prev].slice(0, 20));
   };
 
-  // Simulate FCY events
-  useEffect(() => {
-    const fcyInterval = setInterval(() => {
-      if (Math.random() < 0.05) {
-        setFcyActive(true);
-        addAlert('FULL COURSE YELLOW ACTIVATED', 'fcy');
-        setTimeout(() => {
-          setFcyActive(false);
-          addAlert('FULL COURSE YELLOW CLEARED - RACING RESUMED', 'fcy');
-        }, 8000);
-      }
-    }, 15000);
-
-    return () => clearInterval(fcyInterval);
-  }, []);
+  const handleDataLoaded = (data: { telemetry: any[], weather: any[], laps: any[], sections?: any[], driverName?: string }) => {
+    setTelemetryData(data.telemetry);
+    setWeatherData(data.weather);
+    setLapsData(data.laps);
+    if (data.sections) setSectionsData(data.sections);
+    if (data.driverName) setCurrentDriver(data.driverName);
+    setIsDataLoaded(true);
+    addAlert(`Session data loaded successfully for Car #${data.driverName || 'Unknown'}`, 'system');
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#000000] via-[#0a0a0a] to-[#050505] text-white overflow-x-hidden">
@@ -74,29 +78,39 @@ export default function App() {
       }} />
 
       {/* Top Bar */}
-      <TopBar fcyActive={fcyActive} />
+      <TopBar fcyActive={fcyActive} driverName={currentDriver} />
 
       {/* Main Content */}
       <main className="relative z-10 pt-24 pb-12 px-6 max-w-[1800px] mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left Panel - Diagnostics */}
           <aside className="lg:col-span-3 space-y-6">
-            <DriverDNA addAlert={addAlert} />
+            <DriverDNA 
+              addAlert={addAlert} 
+              telemetryData={telemetryData} 
+              lapsData={lapsData}
+              sectionsData={sectionsData}
+              driverName={currentDriver}
+            />
+            <PositionRadar />
           </aside>
 
           {/* Center Panel - Live Data Hub */}
           <section className="lg:col-span-6 space-y-6">
-            <LiveTelemetry />
-            <TrackGrip addAlert={addAlert} />
+            <LiveTelemetry telemetryData={telemetryData} />
+            <TrackGrip addAlert={addAlert} telemetryData={telemetryData} weatherData={weatherData} />
           </section>
 
           {/* Right Panel - Actionable Intel */}
           <aside className="lg:col-span-3 space-y-6">
-            <OvertakeDefense addAlert={addAlert} />
+            <OvertakeDefense addAlert={addAlert} telemetryData={telemetryData} />
             <AlertFeed alerts={alerts} />
           </aside>
         </div>
       </main>
+
+      {/* Data Upload Modal - Placed last to ensure top z-index stacking */}
+      {!isDataLoaded && <DataUpload onDataLoaded={handleDataLoaded} />}
     </div>
   );
 }
