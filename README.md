@@ -1,3 +1,6 @@
+<p align="center">
+   <img src="https://c.tenor.com/Zuu-LyyFdGwAAAAd/tenor.gif" alt="Toyota GR">
+</p>
 # 🏁 Dynamic Grip Coefficient (DGC) Module
 
 **Description**
